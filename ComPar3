@@ -2,8 +2,6 @@
 
 ## Script dependencies
 
-#export the path
-
 export PATH=$PATH:/path/to/directory/BEDTools-2.16.2/bin/bedtools
 export PATH=$PATH:/path/to/directory/blast-2.2.26+/bin
 export PATH=$PATH:/path/to/directory/python/bin/python2.7
