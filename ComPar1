@@ -1,0 +1,96 @@
+#!/bin/bash
+
+#Mapping and annotation pipeline for paired end genome data
+#Martine Zilversmit, National Institute of Allergy and Infectious Disease, National Institutes of Health
+
+#Before beginning, the user is strongly advised to make directories for the software, reference genomes, and read files.
+#The pipeline is designed to use hard links to this directories and contained files 
+
+## Script dependencies
+
+#export the path
+#This is where you put the $PATH directions to every program you are going to use
+#Be sure to put the path to where the command is located, which is often
+#in a subdirectory names /bin
+
+export PATH=$PATH:/path/to/directory/bwa-0.7.5a
+export PATH=$PATH:/path/to/directory/samtools-0.1.18
+export PATH=$PATH:/path/to/directory/samtools-0.1.18/bcftools/
+export PATH=$PATH:/path/to/directory/java/bin/java
+export PATH=$PATH:/path/to/directory/java/bin/snpEff
+export PATH=$PATH:/path/to/directory/java/bin/python2.7
+export PATH=$PATH:/path/to/directory/java/bin/HDR.py
+
+
+## Script variables
+
+#The only variable we use here is a the reference genome (FASTA format)
+#Be sure to use the complete to path to its location if it is not located in your working directory
+
+index=/path/to/directory/[REFERENCE]
+FASTQ1=/path/to/directory/FASTQ_Files/[Sample fastq file forward]
+FASTQ2=/path/to/directory/FASTQ_Files/[FASTQ2]
+HDR_params=/path/to/directory/[HDR parameter file]
+Analysis=[Sample_to_reference_DATE]
+
+
+## Commands
+
+#Commands such as "date" and "echo" indicate the headings in the standard output file
+#Make the directory for this analysis
+
+date
+mkdir $Analysis
+cd $Analysis
+
+#The -f option always indicatd the file to come afterward
+
+echo; echo Running bwa and FASTA index
+time bwa index $index
+time samtools faidx $index
+
+# -Y Casava Filter 
+#-q INT	 Parameter for read trimming. 
+#-I The input is in the Illumina 1.5 read format (quality equals ASCII-64). 
+
+echo; echo Running alignment
+time bwa mem -t 10 $index $FASTQ1 $FASTQ2 > aln-pe.sam
+
+#-b Out put BAM
+#S Input is SAM
+echo; echo Converting SAM to sorted BAM
+time samtools view -bS -T $index -o aln-pe.sam
+
+#Sort bam by contig/chromosome
+time samtools sort aln-pe.sorted
+
+#Makes the index the .bam.bai which you will need to view the BAM file in a browser
+#Retrieves and print stats in the index file. The output is TAB delimited with each line consisting of reference sequence name, sequence length, # mapped reads and # unmapped reads.
+echo; echo Index and Get stats
+time samtools index aln-pe.sorted.bam
+time samtools idxstats aln-pe.sorted.bam
+
+#remove duplicate reads
+samtools rmdup aln-pe.sorted.bam aln-pe_rmdup.bam
+
+#Run mpileup first to get genotype likelihoods, then bcftools to do the variant calling
+#Add -l [BED file] after index if using a Bed file
+#-E for extended BAQ calling algorithm (E)
+#-u indicated that the genotype likelihoods should be in compressed binary call format (BCF), compressed is used for piping like we are doing here.
+#-b Output in the BCF format. The default is VCF
+#-v Output variant sites only (force -c)
+#-c Call variants using Bayesian inference. This option automatically invokes option -e. (-e Perform max-likelihood inference only, including estimating the site allele frequency, testing Hardy-Weinberg equlibrium and testing associations with LRT.)
+#-g Call per-sample genotypes at variant sites (force -c)
+samtools mpileup -Euf $index aln-pe_rmdup.bam | bcftools view -bvcg -> aln-pe_rmdup.bcf
+
+#Make VCF
+bcftools view aln-pe_rmdup.bcf | vcfutils.pl varFilter > aln-pe.vcf
+
+#Annotate variants from VCF using snpEff
+Java -Xmx1G -jar snpEff.jar -i vcf -o vcf -s pyoelii_summary -c snpEff.config pyoelii -no-downstream -no-upstream -no-utr aln-pe.vcf > aln-pe_vcf_anno.txt
+
+#Run HDR
+python hdr.py < $HDR_params
+
+echo done
+date
