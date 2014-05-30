@@ -1,0 +1,25 @@
+#!/bin/bash
+
+## Script dependencies
+
+#export the path
+
+export PATH=$PATH:/path/to/directory/BEDTools-2.16.2/bin/bedtools
+export PATH=$PATH:/path/to/directory/blast-2.2.26+/bin
+export PATH=$PATH:/path/to/directory/python/bin/python2.7
+export PATH=$PATH:/path/to/directory//blast_xml_to_text.py
+
+sample_genome=/path/to/directory/[SAMPLE GENOME]
+db=/path/to/directory/[REFERENCE GENOME]
+bed=/path/to/directory/[BED FILE]
+
+
+/path/to/directory/BEDTools-2.16.2/bin/bedtools getfasta -fi $reference -bed $bed -fo [BEDNAME]_Date.fasta
+
+blastn -query [BEDNAME]_Date.fasta -db $db -out [BEDNAME]_Date.fasta.blast.xml -outfmt 5 -max_target_seqs 1
+
+python blast_xml_to_text.py -in [BEDNAME]_Date.fasta.blast.xml
+
+echo done
+date
+
